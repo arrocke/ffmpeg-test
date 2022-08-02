@@ -1,13 +1,9 @@
 <template>
-  <video
-    :src="video"
-    controls
-  />
-  <br>
-  <button @click="transcode">
-    Start
-  </button>
+<img ref="image" />
+  <br />
+  <input type="file" @change="onFileUpload" />
   <p>{{ message }}</p>
+  <canvas ref="canvas" />
 </template>
 
 <script>
@@ -22,28 +18,43 @@ export default defineComponent({
       log: true,
     });
     const message = ref("Click Start to Transcode");
-    let video = ref(null);
-    const file =
-      process.env.NODE_ENV === "production"
-        ? "/vue-app/flame.avi"
-        : "/flame.avi";
-    // methods
-    async function transcode() {
+    let canvas = ref(null);
+    const image = ref(null)
+
+    async function onFileUpload(e) {
+      const file = e.target.files[0];
       message.value = "Loading ffmeg-core.js";
       await ffmpeg.load();
       message.value = "Start transcoding";
-      ffmpeg.FS("writeFile", "test.avi", await fetchFile(file));
-      await ffmpeg.run("-i", "test.avi", "test.mp4");
-      message.value = "Complete transcoding";
-      const data = ffmpeg.FS("readFile", "test.mp4");
-      video.value = URL.createObjectURL(
-        new Blob([data.buffer], { type: "video/mp4" })
+      ffmpeg.FS("writeFile", file.name, await fetchFile(file));
+      await ffmpeg.run(
+        "-i",
+        file.name,
+        '-filter:v', 'select=eq(n\\,0)', '-frames:v', '1', 'out.png'
       );
+      message.value = "Complete transcoding";
+      const data = ffmpeg.FS("readFile", "out.png");
+      console.log(data.buffer)
+
+      const url = URL.createObjectURL(
+        new Blob([data.buffer], { type: "image/png" })
+      );
+      const handler = () => {
+        image.value.removeEventListener('load', handler)
+        const context = canvas.value.getContext('2d')
+        canvas.value.width = image.value.width
+        canvas.value.height = image.value.height
+        context.drawImage(image.value, 0, 0)
+        console.log(context.getImageData(0, 0, image.value.width, image.value.height))
+      }
+      image.value.addEventListener('load', handler)
+      image.value.src = url
     }
     return {
-      video,
+      canvas,
+      image,
       message,
-      transcode,
+      onFileUpload,
     };
   },
 });
